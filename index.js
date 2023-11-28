@@ -32,7 +32,11 @@ async function run() {
     const allClassesCollection = client
       .db("eduTechGenius")
       .collection("allClasses");
+    const enrollClassCollection = client
+      .db("eduTechGenius")
+      .collection("enrollClass");
 
+    // All Class Api
     app.get("/allClasses", async (req, res) => {
       try {
         const result = await allClassesCollection.find().toArray();
@@ -46,6 +50,27 @@ async function run() {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const result = await allClassesCollection.findOne(query);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    // Enroll Class Api
+
+    app.post("/enrollClass", async (req, res) => {
+      try {
+        const enrollClass = req.body;
+        const result = await enrollClassCollection.insertOne(enrollClass);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    app.get("/enrollClass", async (req, res) => {
+      try {
+        const result = await enrollClassCollection.find().toArray();
         res.send(result);
       } catch (error) {
         console.log(error);

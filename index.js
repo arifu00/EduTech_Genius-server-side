@@ -1,9 +1,9 @@
 const express = require("express");
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -36,6 +36,35 @@ async function run() {
       .db("eduTechGenius")
       .collection("enrollClass");
 
+
+      // jwt related api
+
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      console.log(user);
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
+    });
+
+    // custom middle ware 
+    const verifyToken = async (req, res, next) => {
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      // console.log(`token inside verify
+      // ${token}`);
+      jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "unauthorized access" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
+
     // All Class Api
     app.get("/allClasses", async (req, res) => {
       try {
@@ -58,7 +87,7 @@ async function run() {
 
     // Enroll Class Api
 
-    app.post("/enrollClass", async (req, res) => {
+    app.post("/enrollClass", verifyToken, async (req, res) => {
       try {
         const enrollClass = req.body;
         const result = await enrollClassCollection.insertOne(enrollClass);
@@ -68,9 +97,13 @@ async function run() {
       }
     });
 
-    app.get("/enrollClass", async (req, res) => {
+    app.get("/enrollClass", verifyToken, async (req, res) => {
       try {
-        const result = await enrollClassCollection.find().toArray();
+        const email = req.query.email;
+        // console.log(email);
+        const query = { userEmail: email };
+        console.log(query);
+        const result = await enrollClassCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
         console.log(error);

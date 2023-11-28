@@ -35,9 +35,11 @@ async function run() {
     const enrollClassCollection = client
       .db("eduTechGenius")
       .collection("enrollClass");
+    const userCollection = client
+      .db("eduTechGenius")
+      .collection("users");
 
-
-      // jwt related api
+    // jwt related api
 
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -48,7 +50,7 @@ async function run() {
       res.send({ token });
     });
 
-    // custom middle ware 
+    // custom middle ware
     const verifyToken = async (req, res, next) => {
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "unauthorized access" });
@@ -108,6 +110,47 @@ async function run() {
       } catch (error) {
         console.log(error);
       }
+    });
+
+    // user api
+  
+    app.post("/user", async (req, res) => {
+      const user = req.body;
+      const query = { email: user.email };
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "user already exists", insertedId: null });
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+    app.get("/user", verifyToken, async (req, res) => {
+      const result = await userCollection.find().toArray();
+      res.send(result);
+    });
+    app.get("/user/admin/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
+    });
+    app.patch("/user/admin/:id", verifyToken,  async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await userCollection.updateOne(filter, updatedDoc);
+      res.send(result);
     });
 
     // payment intent

@@ -35,15 +35,16 @@ async function run() {
     const enrollClassCollection = client
       .db("eduTechGenius")
       .collection("enrollClass");
-    const userCollection = client
+    const teacherRequestCollection = client
       .db("eduTechGenius")
-      .collection("users");
+      .collection("teacherRequest");
+    const userCollection = client.db("eduTechGenius").collection("users");
 
     // jwt related api
 
     app.post("/jwt", async (req, res) => {
       const user = req.body;
-      console.log(user);
+      // console.log(user, 'user in jwt');
       const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
         expiresIn: "1h",
       });
@@ -56,8 +57,8 @@ async function run() {
         return res.status(401).send({ message: "unauthorized access" });
       }
       const token = req.headers.authorization.split(" ")[1];
-      // console.log(`token inside verify
-      // ${token}`);
+      console.log(`token inside verify
+      ${token}`);
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
         if (err) {
           return res.status(401).send({ message: "unauthorized access" });
@@ -66,11 +67,32 @@ async function run() {
         next();
       });
     };
+    // use verify admin after verifyToken
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === "Admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
 
     // All Class Api
     app.get("/allClasses", async (req, res) => {
       try {
-        const result = await allClassesCollection.find().toArray();
+        let sortObj = {};
+
+        const sortField = req.query.sortField;
+        // console.log(sortField);
+        const sortOrder = req.query.sortOrder;
+
+        if (sortField && sortOrder) {
+          sortObj[sortField] = sortOrder;
+        }
+        const cursor = allClassesCollection.find().sort(sortObj);
+        const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -87,6 +109,70 @@ async function run() {
       }
     });
 
+    // teacher request api
+
+    app.post("/teacherRequest", verifyToken, async (req, res) => {
+      try {
+        const teacherRequest = req.body;
+        const result = await teacherRequestCollection.insertOne(teacherRequest);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+    app.get("/teacherRequest", verifyToken, async (req, res) => {
+      try {
+        let query = {};
+        if (req.query.email) {
+          const email = req.query.email;
+          query = { email: email };
+        }
+        // console.log(query, 'query');
+        const result = await teacherRequestCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+    app.patch(
+      "/teacherRequest/:email",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
+          const filter = { email: email };
+          const updatedDoc = {
+            $set: {
+              status: "Accepted",
+            },
+          };
+          const result = await teacherRequestCollection.updateOne(
+            filter,
+            updatedDoc
+          );
+          res.send(result);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    );
+    app.delete(
+      "/teacherRequest/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const filter = { _id: new ObjectId(id) };
+          const result = await teacherRequestCollection.deleteOne(filter);
+          res.send(result);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    );
+
     // Enroll Class Api
 
     app.post("/enrollClass", verifyToken, async (req, res) => {
@@ -101,10 +187,12 @@ async function run() {
 
     app.get("/enrollClass", verifyToken, async (req, res) => {
       try {
-        const email = req.query.email;
-        // console.log(email);
-        const query = { userEmail: email };
-        console.log(query);
+        let query = {};
+        if (req.query.email) {
+          const email = req.query.email;
+          query = { userEmail: email };
+        }
+        // console.log(query, 'query');
         const result = await enrollClassCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
@@ -113,44 +201,86 @@ async function run() {
     });
 
     // user api
-  
+
     app.post("/user", async (req, res) => {
       const user = req.body;
-      const query = { email: user.email };
-      const existingUser = await userCollection.findOne(query);
-      if (existingUser) {
-        return res.send({ message: "user already exists", insertedId: null });
+      try {
+        const query = { email: user.email };
+        const existingUser = await userCollection.findOne(query);
+        if (existingUser) {
+          return res.send({ message: "user already exists", insertedId: null });
+        }
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
       }
-      const result = await userCollection.insertOne(user);
-      res.send(result);
     });
-    app.get("/user", verifyToken, async (req, res) => {
-      const result = await userCollection.find().toArray();
-      res.send(result);
+    app.get("/user", async (req, res) => {
+      try {
+        let query = {};
+        if (req.query.email) {
+          const email = req.query.email;
+          query = { email: email };
+        }
+        // console.log(query, 'query');
+        const result = await userCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
     });
+    app.patch(
+      "/user/teacher/:email",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const email = req.params.email;
+          const filter = { email: email };
+          const updatedDoc = {
+            $set: {
+              role: "Teacher",
+            },
+          };
+          const result = await userCollection.updateOne(filter, updatedDoc);
+          res.send(result);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    );
     app.get("/user/admin/:email", verifyToken, async (req, res) => {
-      const email = req.params.email;
-      if (email !== req.decoded.email) {
-        return res.status(403).send({ message: "forbidden access" });
+      try {
+        const email = req.params.email;
+        if (email !== req.decoded.email) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
+        const query = { email: email };
+        const user = await userCollection.findOne(query);
+        let admin = false;
+        if (user) {
+          admin = user?.role === "Admin";
+        }
+        res.send({ admin });
+      } catch (error) {
+        console.log(error);
       }
-      const query = { email: email };
-      const user = await userCollection.findOne(query);
-      let admin = false;
-      if (user) {
-        admin = user?.role === "admin";
-      }
-      res.send({ admin });
     });
-    app.patch("/user/admin/:id", verifyToken,  async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
-      const result = await userCollection.updateOne(filter, updatedDoc);
-      res.send(result);
+    app.patch("/user/admin/:id", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: "Admin",
+          },
+        };
+        const result = await userCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     // payment intent

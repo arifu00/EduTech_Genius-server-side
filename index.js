@@ -89,6 +89,7 @@ async function run() {
         console.log(error);
       }
     });
+
     app.get("/allClasses", async (req, res) => {
       try {
         let sortObj = {};
@@ -99,12 +100,19 @@ async function run() {
         if (sortField && sortOrder) {
           sortObj[sortField] = sortOrder;
         }
-
+        console.log(req.query);
         let query = {};
+        if (req.query.status) {
+          const status = "approved";
+          query = { status: status };
+        }
+
+        // console.log(query);
         if (req.query.email) {
           const email = req.query.email;
           query = { email: email };
         }
+
         // console.log(query, 'query');
         const cursor = allClassesCollection.find(query).sort(sortObj);
         const result = await cursor.toArray();
@@ -113,6 +121,69 @@ async function run() {
         console.log(error);
       }
     });
+    app.get("/admin/allClasses", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        console.log(req.query);
+        let query = {};
+        if (req.query.status) {
+          const status = "pending";
+          query = { status: status };
+        }
+
+        // console.log(query, 'query');
+        const cursor = allClassesCollection.find(query);
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+    app.patch(
+      "/adminApproved/allClasses/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const filter = { _id: new ObjectId(id) };
+          const updatedDoc = {
+            $set: {
+              status: "approved",
+            },
+          };
+          const result = await allClassesCollection.updateOne(
+            filter,
+            updatedDoc
+          );
+          res.send(result);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    );
+    app.patch(
+      "/adminRejected/allClasses/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const id = req.params.id;
+          const filter = { _id: new ObjectId(id) };
+          const updatedDoc = {
+            $set: {
+              status: "rejected",
+            },
+          };
+          const result = await allClassesCollection.updateOne(
+            filter,
+            updatedDoc
+          );
+          res.send(result);
+        } catch (error) {
+          console.log(error);
+        }
+      }
+    );
     app.get("/allClasses/:id", async (req, res) => {
       try {
         const id = req.params.id;

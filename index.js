@@ -57,8 +57,8 @@ async function run() {
         return res.status(401).send({ message: "unauthorized access" });
       }
       const token = req.headers.authorization.split(" ")[1];
-      console.log(`token inside verify
-      ${token}`);
+      // console.log(`token inside verify
+      // ${token}`);
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
         if (err) {
           return res.status(401).send({ message: "unauthorized access" });
@@ -80,10 +80,18 @@ async function run() {
     };
 
     // All Class Api
+    app.post("/allClasses", verifyToken, async (req, res) => {
+      try {
+        const classItem = req.body;
+        const result = await allClassesCollection.insertOne(classItem);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
     app.get("/allClasses", async (req, res) => {
       try {
         let sortObj = {};
-
         const sortField = req.query.sortField;
         // console.log(sortField);
         const sortOrder = req.query.sortOrder;
@@ -91,7 +99,14 @@ async function run() {
         if (sortField && sortOrder) {
           sortObj[sortField] = sortOrder;
         }
-        const cursor = allClassesCollection.find().sort(sortObj);
+
+        let query = {};
+        if (req.query.email) {
+          const email = req.query.email;
+          query = { email: email };
+        }
+        // console.log(query, 'query');
+        const cursor = allClassesCollection.find(query).sort(sortObj);
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
@@ -103,6 +118,41 @@ async function run() {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
         const result = await allClassesCollection.findOne(query);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+    app.patch("/updateClasses/:id", verifyToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const updatedClass = req.body;
+        // console.log(updatedClass);
+        const updateDoc = {
+          $set: {
+            title: updatedClass.title,
+            name: updatedClass.name,
+            email: updatedClass.email,
+            image: updatedClass.image,
+            category: updatedClass.category,
+            price: updatedClass.price,
+            shortDescription: updatedClass.shortDescription,
+          },
+        };
+        // console.log(updateDoc);
+        const result = await allClassesCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+    app.delete("/allClasses/:id", verifyToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        console.log(id);
+        const filter = { _id: new ObjectId(id) };
+        const result = await allClassesCollection.deleteOne(filter);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -301,7 +351,7 @@ async function run() {
       }
     });
 
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
